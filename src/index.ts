@@ -10,6 +10,7 @@
 import { buildWorkbook, workbookFilename } from "./export/xlsx.js";
 import { makeClient } from "./github/client.js";
 import { fetchIssue, fetchProject } from "./github/queries.js";
+import type { IssueSnapshot, ProjectSnapshot } from "./github/types.js";
 import { pdfFilename, renderPdf } from "./render/pdf.js";
 
 type ProjectRef = {
@@ -111,6 +112,31 @@ function badRequest(reason: string): Response {
   });
 }
 
+/**
+ * Map an exception thrown during a GitHub fetch to a user-facing Response.
+ *
+ * GitHub's GraphQL API returns "Could not resolve to a..." errors for both
+ * genuinely missing resources and resources the token can't see. We treat
+ * both as 404 with a message that acknowledges the ambiguity, rather than
+ * leaking the raw error or pretending we can tell them apart.
+ */
+function fetchErrorResponse(err: unknown): Response {
+  const message = err instanceof Error ? err.message : String(err);
+
+  if (message.includes("Could not resolve")) {
+    return new Response(
+      "Not found, or not accessible with this Worker's GitHub token.\n",
+      { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } },
+    );
+  }
+
+  console.error("GitHub fetch failed:", message);
+  return new Response("Failed to fetch from GitHub. See Worker logs.\n", {
+    status: 502,
+    headers: { "content-type": "text/plain; charset=utf-8" },
+  });
+}
+
 async function handleExport(url: URL, env: Env): Promise<Response> {
   const target = url.searchParams.get("url");
   if (!target) return badRequest("missing ?url= parameter");
@@ -123,12 +149,14 @@ async function handleExport(url: URL, env: Env): Promise<Response> {
   }
 
   const client = makeClient(env.GITHUB_TOKEN);
-  const snapshot = await fetchProject(
-    client,
-    ref.ownerType,
-    ref.owner,
-    ref.number,
-  );
+
+  let snapshot: ProjectSnapshot | null;
+  try {
+    snapshot = await fetchProject(client, ref.ownerType, ref.owner, ref.number);
+  } catch (err) {
+    return fetchErrorResponse(err);
+  }
+
   if (!snapshot) {
     return new Response("Project not found or not accessible.\n", {
       status: 404,
@@ -160,7 +188,14 @@ async function handlePdf(url: URL, env: Env): Promise<Response> {
   }
 
   const client = makeClient(env.GITHUB_TOKEN);
-  const snapshot = await fetchIssue(client, ref.owner, ref.repo, ref.number);
+
+  let snapshot: IssueSnapshot | null;
+  try {
+    snapshot = await fetchIssue(client, ref.owner, ref.repo, ref.number);
+  } catch (err) {
+    return fetchErrorResponse(err);
+  }
+
   if (!snapshot) {
     return new Response("Issue not found or not accessible.\n", {
       status: 404,
