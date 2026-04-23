@@ -30,10 +30,10 @@ export async function renderPdf(
       headerTemplate: headerHtml,
       footerTemplate: "<span></span>",
       margin: {
-        top: "1.5cm",
-        bottom: "1cm",
-        left: "1.5cm",
-        right: "1.5cm",
+        top: "0.6in",
+        bottom: "0.4in",
+        left: "0.6in",
+        right: "0.6in",
       },
     });
 
