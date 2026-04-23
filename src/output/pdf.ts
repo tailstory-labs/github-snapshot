@@ -16,7 +16,7 @@ export async function buildPdf(
   snapshot: IssueSnapshot,
   browserBinding: Fetcher,
 ): Promise<Uint8Array> {
-  const { mainHtml, headerHtml } = buildIssueHtml(snapshot);
+  const { headerHtml, mainHtml, footerHtml } = buildIssueHtml(snapshot);
 
   const browser = await puppeteer.launch(browserBinding);
   try {
@@ -28,7 +28,7 @@ export async function buildPdf(
       printBackground: true,
       displayHeaderFooter: true,
       headerTemplate: headerHtml,
-      footerTemplate: "<span></span>",
+      footerTemplate: footerHtml,
       margin: {
         top: "0.6in",
         bottom: "0.4in",

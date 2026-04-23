@@ -3,13 +3,17 @@ import Mustache from "mustache";
 
 import type { IssueSnapshot } from "../github/types.js";
 import pdfStyles from "./pdf.css";
+import pdfFooter from "./pdf-footer.html";
+import pdfHeader from "./pdf-header.html";
 import pdfTemplate from "./pdf-template.html";
 
 export interface IssueHtml {
-  /** Full <html> document for the PDF body. */
-  mainHtml: string;
   /** Small HTML fragment shown as the repeating page header. */
   headerHtml: string;
+  /** Full <html> document for the PDF body. */
+  mainHtml: string;
+  /** Small HTML fragment shown as the repeating page footer. */
+  footerHtml: string;
 }
 
 /** Format an ISO timestamp as "2026-04-22 14:30 UTC" for display. */
@@ -55,13 +59,6 @@ function metadataRows(
   return rows.map(([label, value]) => ({ label, value }));
 }
 
-/** Inline CSS string for the repeating PDF page header. Not a stylesheet
- * because Cloudflare's PDF API runs the header in its own CSS scope. */
-const HEADER_INLINE_CSS =
-  "font-size: 8pt; font-family: -apple-system, BlinkMacSystemFont, sans-serif; " +
-  "color: #59636e; width: 100%; padding: 0 0.5cm; display: flex; " +
-  "justify-content: space-between; -webkit-print-color-adjust: exact;";
-
 /**
  * Build the HTML pieces needed to generate a PDF for the given issue.
  *
@@ -69,11 +66,8 @@ const HEADER_INLINE_CSS =
  * repeating page header. The PDF builder wires these together.
  */
 export function buildIssueHtml(snapshot: IssueSnapshot): IssueHtml {
-  const repoSlug = `${snapshot.owner}/${snapshot.repo}`;
-
   const view = {
-    styleTag: `<style>${pdfStyles}</style>`,
-    repoSlug,
+    repoSlug: `${snapshot.owner}/${snapshot.repo}`,
     number: snapshot.number,
     title: snapshot.title,
     metadataRows: metadataRows(snapshot),
@@ -89,16 +83,9 @@ export function buildIssueHtml(snapshot: IssueSnapshot): IssueHtml {
     })),
   };
 
-  const mainHtml = Mustache.render(pdfTemplate, view);
+  const headerHtml = Mustache.render(pdfHeader, view);
+  const mainHtml = Mustache.render(pdfTemplate, view, { styles: pdfStyles });
+  const footerHtml = Mustache.render(pdfFooter, view);
 
-  // The header template uses Cloudflare's special spans (.pageNumber,
-  // .totalPages) which the renderer fills in at PDF generation time.
-  const headerHtml = `
-		<div style="${HEADER_INLINE_CSS}">
-			<span>${Mustache.escape(repoSlug)} #${snapshot.number}</span>
-			<span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
-		</div>
-	`;
-
-  return { mainHtml, headerHtml };
+  return { headerHtml, mainHtml, footerHtml };
 }

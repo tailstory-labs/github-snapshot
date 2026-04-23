@@ -71,7 +71,7 @@ export function buildWorkbook(snapshot: ProjectSnapshot): Uint8Array {
     itemToRow(item, snapshot.fieldNames),
   );
 
-  const sheet = XLSX.utils.tson_to_sheet(rows, { header: headers });
+  const sheet = XLSX.utils.json_to_sheet(rows, { header: headers });
   const workbook = XLSX.utils.book_new();
 
   // Sheet name has a 31-char limit and forbids a few characters; truncate
