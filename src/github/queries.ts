@@ -351,28 +351,28 @@ const ISSUE_QUERY = /* GraphQL */ `
 				issueFieldValues(first: 50) {
 					nodes {
 						__typename
-						... on IssueFieldText {
-							text
+						... on IssueFieldTextValue {
+							value
 							field {
-								name
+								... on IssueFieldText { name }
 							}
 						}
-						... on IssueFieldNumber {
-							number
+						... on IssueFieldNumberValue {
+							value
 							field {
-								name
+								... on IssueFieldNumber { name }
 							}
 						}
-						... on IssueFieldDate {
-							date
+						... on IssueFieldDateValue {
+							value
 							field {
-								name
+								... on IssueFieldDate { name }
 							}
 						}
-						... on IssueFieldSingleSelect {
-							optionName: name
+						... on IssueFieldSingleSelectValue {
+							value
 							field {
-								name
+								... on IssueFieldSingleSelect { name }
 							}
 						}
 					}
@@ -397,10 +397,7 @@ const ISSUE_QUERY = /* GraphQL */ `
 
 interface RawIssueFieldValue {
   __typename: string;
-  text?: string;
-  number?: number;
-  date?: string;
-  optionName?: string;
+  value?: string | number;
   field?: { name?: string };
 }
 
@@ -440,19 +437,7 @@ function extractIssueFieldValue(
 ): [name: string, value: FieldValue] | null {
   const name = raw.field?.name;
   if (!name) return null;
-
-  switch (raw.__typename) {
-    case "IssueFieldText":
-      return [name, raw.text ?? null];
-    case "IssueFieldNumber":
-      return [name, raw.number ?? null];
-    case "IssueFieldDate":
-      return [name, raw.date ?? null];
-    case "IssueFieldSingleSelect":
-      return [name, raw.optionName ?? null];
-    default:
-      return null;
-  }
+  return [name, raw.value ?? null];
 }
 
 type RawIssue = NonNullable<
