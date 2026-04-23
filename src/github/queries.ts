@@ -348,7 +348,7 @@ const ISSUE_QUERY = /* GraphQL */ `
 				parent {
 					url
 				}
-				fieldValues(first: 50) {
+				issueFieldValues(first: 50) {
 					nodes {
 						__typename
 						... on IssueFieldText {
@@ -421,7 +421,7 @@ interface RawIssueResponse {
       milestone: { title: string } | null;
       issueType: { name: string } | null;
       parent: { url: string } | null;
-      fieldValues: { nodes: RawIssueFieldValue[] };
+      issueFieldValues: { nodes: RawIssueFieldValue[] };
       comments: {
         pageInfo: { hasNextPage: boolean; endCursor: string | null };
         nodes: Array<{
@@ -498,7 +498,7 @@ export async function fetchIssue(
   if (!issueMeta) return null;
 
   const fields: Record<string, FieldValue> = {};
-  for (const raw of issueMeta.fieldValues.nodes) {
+  for (const raw of issueMeta.issueFieldValues.nodes) {
     const entry = extractIssueFieldValue(raw);
     if (entry) fields[entry[0]] = entry[1];
   }

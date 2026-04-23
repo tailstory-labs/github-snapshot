@@ -14,8 +14,9 @@ export function makeClient(token: string): GraphQL {
   return graphql.defaults({
     headers: {
       authorization: `bearer ${token}`,
-      // GitHub recommends sending a meaningful User-Agent.
       "user-agent": "github-snapshot",
+      // Opt into preview schemas. Comma-separated if more get added later.
+      "graphql-features": "issue_fields",
     },
   });
 }
