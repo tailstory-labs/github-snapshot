@@ -7,11 +7,13 @@
  *   GET /pdf?url=...      — issue URL → pdf
  */
 
+import Mustache from "mustache";
 import { BUILD_INFO } from "./build-info.ts";
 import { makeClient } from "./github/client.ts";
 import { fetchIssue, fetchProject } from "./github/queries.ts";
 import type { IssueSnapshot, ProjectSnapshot } from "./github/types.ts";
 import landingStyles from "./landing.css";
+import landingTemplate from "./landing.html";
 import { buildPdf, pdfFilename } from "./output/pdf/index.ts";
 import { buildWorkbook, workbookFilename } from "./output/xlsx/index.ts";
 
@@ -70,41 +72,13 @@ function landingPage(env: Env): Response {
   const versionId = env.CF_VERSION_METADATA.id;
   const versionTimestamp = env.CF_VERSION_METADATA.timestamp;
 
-  const html = `<!doctype html>
-<html lang="en">
-<head>
-	<meta charset="utf-8">
-	<title>github-snapshot</title>
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<style>${landingStyles}</style>
-</head>
-<body>
-	<h1>github-snapshot</h1>
-	<p class="tagline">Paste a GitHub Project or Issue URL.</p>
-
-	<form action="/export" method="get">
-		<label for="project-url">Project URL → Excel</label>
-		<input type="url" id="project-url" name="url" required
-			placeholder="https://github.com/orgs/acme/projects/3">
-		<button type="submit">Export</button>
-	</form>
-
-	<form action="/pdf" method="get">
-		<label for="issue-url">Issue URL → PDF</label>
-		<input type="url" id="issue-url" name="url" required
-			placeholder="https://github.com/acme/widgets/issues/42">
-		<button type="submit">Render</button>
-	</form>
-
-	<footer>
-		<dl>
-			<dt>Commit</dt><dd>${escapeHtml(commit)} (${escapeHtml(branch)})</dd>
-			<dt>Version</dt><dd>${escapeHtml(versionId)}</dd>
-			<dt>Timestamp</dt><dd>${escapeHtml(versionTimestamp)}</dd>
-		</dl>
-	</footer>
-</body>
-</html>`;
+  const html = Mustache.render(landingTemplate, {
+    styles: landingStyles,
+    commit,
+    branch,
+    versionId,
+    versionTimestamp,
+  });
 
   return new Response(html, {
     headers: { "content-type": "text/html; charset=utf-8" },

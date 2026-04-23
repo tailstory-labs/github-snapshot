@@ -9,6 +9,7 @@
     "ignoreUnknown": false,
     "includes": [
       "**",
+      "!src/landing.html",
       "!src/output/pdf/document.html",
       "!!worker-configuration.d.ts"
     ]

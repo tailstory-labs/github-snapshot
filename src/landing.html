@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>github-snapshot</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<style>{{styles}}</style>
+</head>
+<body>
+	<h1>github-snapshot</h1>
+	<p class="tagline">Paste a GitHub Project or Issue URL.</p>
+
+	<form action="/export" method="get">
+		<label for="project-url">Project URL → Excel</label>
+		<input type="url" id="project-url" name="url" required
+			placeholder="https://github.com/orgs/acme/projects/3">
+		<button type="submit">Export</button>
+	</form>
+
+	<form action="/pdf" method="get">
+		<label for="issue-url">Issue URL → PDF</label>
+		<input type="url" id="issue-url" name="url" required
+			placeholder="https://github.com/acme/widgets/issues/42">
+		<button type="submit">Render</button>
+	</form>
+
+	<footer>
+		<dl>
+			<dt>Commit</dt><dd>{{commit}} ({{branch}})</dd>
+			<dt>Version</dt><dd>{{versionId}}</dd>
+			<dt>Timestamp</dt><dd>{{versionTimestamp}}</dd>
+		</dl>
+	</footer>
+</body>
+</html>
