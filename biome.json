@@ -9,7 +9,7 @@
     "ignoreUnknown": false,
     "includes": [
       "**",
-      "!src/output/pdf-template.html",
+      "!src/output/pdf/document.html",
       "!!worker-configuration.d.ts"
     ]
   },

@@ -21,9 +21,15 @@ src/
 │   ├── queries.ts        — GraphQL queries and pagination
 │   └── types.ts          — typed shapes for projects and issues
 └── output/
-    ├── xlsx.ts           — workbook builder (SheetJS)
-    ├── pdf.ts            — Browser Rendering integration
-    └── pdf-template.ts   — HTML template for issue PDFs
+    ├── xlsx/
+    │   └── index.ts      — workbook builder (SheetJS)
+    └── pdf/
+        ├── index.ts      — Browser Rendering integration (entry)
+        ├── html.ts       — Mustache → HTML document builder
+        ├── document.html — main Mustache template
+        ├── page-header.html
+        ├── page-footer.html
+        └── styles.css
 scripts/
 └── write-build-info.mjs  — generates src/build-info.ts at build time
 ```

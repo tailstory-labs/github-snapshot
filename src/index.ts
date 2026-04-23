@@ -12,8 +12,8 @@ import { makeClient } from "./github/client.ts";
 import { fetchIssue, fetchProject } from "./github/queries.ts";
 import type { IssueSnapshot, ProjectSnapshot } from "./github/types.ts";
 import landingStyles from "./landing.css";
-import { buildPdf, pdfFilename } from "./output/pdf.ts";
-import { buildWorkbook, workbookFilename } from "./output/xlsx.ts";
+import { buildPdf, pdfFilename } from "./output/pdf/index.ts";
+import { buildWorkbook, workbookFilename } from "./output/xlsx/index.ts";
 
 type ProjectRef = {
   kind: "project";

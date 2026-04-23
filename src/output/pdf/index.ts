@@ -1,7 +1,7 @@
 import puppeteer from "@cloudflare/puppeteer";
 
-import type { IssueSnapshot } from "../github/types.ts";
-import { buildIssueHtml } from "./pdf-template.ts";
+import type { IssueSnapshot } from "../../github/types.ts";
+import { buildIssueHtml } from "./html.ts";
 
 /**
  * Render an issue snapshot to PDF bytes using the Browser Rendering binding.

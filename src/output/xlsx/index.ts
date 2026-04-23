@@ -4,7 +4,7 @@ import type {
   FieldValue,
   ProjectItem,
   ProjectSnapshot,
-} from "../github/types.ts";
+} from "../../github/types.ts";
 
 /** Fixed columns we always include, in the order they appear in the workbook. */
 const BASE_COLUMNS = [

@@ -1,11 +1,11 @@
 import { marked } from "marked";
 import Mustache from "mustache";
 
-import type { IssueSnapshot } from "../github/types.js";
-import pdfStyles from "./pdf.css";
-import pdfFooter from "./pdf-footer.html";
-import pdfHeader from "./pdf-header.html";
-import pdfTemplate from "./pdf-template.html";
+import type { IssueSnapshot } from "../../github/types.js";
+import pdfTemplate from "./document.html";
+import pdfFooter from "./page-footer.html";
+import pdfHeader from "./page-header.html";
+import pdfStyles from "./styles.css";
 
 export interface IssueHtml {
   /** Small HTML fragment shown as the repeating page header. */
