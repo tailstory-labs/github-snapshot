@@ -2,5 +2,6 @@ node_modules/
 .wrangler/
 .dev.vars
 worker-configuration.d.ts
+src/build-info.ts
 *.log
 .DS_Store

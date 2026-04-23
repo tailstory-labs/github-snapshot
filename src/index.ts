@@ -7,6 +7,7 @@
  *   GET /pdf?url=...      — issue URL → pdf
  */
 
+import { BUILD_INFO } from "./build-info.js";
 import { buildWorkbook, workbookFilename } from "./export/xlsx.js";
 import { makeClient } from "./github/client.js";
 import { fetchIssue, fetchProject } from "./github/queries.js";
@@ -65,7 +66,8 @@ function parseGitHubUrl(input: string): GitHubRef | null {
 
 function landingPage(env: Env): Response {
   const versionId = env.CF_VERSION_METADATA.id;
-  const versionTag = env.CF_VERSION_METADATA.tag || "(no tag)";
+  const versionTimestamp = env.CF_VERSION_METADATA.timestamp;
+  const { commit, branch } = BUILD_INFO;
 
   const html = `<!doctype html>
 <html lang="en">
@@ -107,8 +109,9 @@ function landingPage(env: Env): Response {
 
 	<footer>
 		<dl>
+			<dt>Commit</dt><dd>${escapeHtml(commit)} (${escapeHtml(branch)})</dd>
 			<dt>Version</dt><dd>${escapeHtml(versionId)}</dd>
-			<dt>Tag</dt><dd>${escapeHtml(versionTag)}</dd>
+			<dt>Timestamp</dt><dd>${escapeHtml(versionTimestamp)}</dd>
 		</dl>
 	</footer>
 </body>
