@@ -1,0 +1,438 @@
+import type { graphql as GraphQL } from "@octokit/graphql/types";
+
+import type {
+  FieldValue,
+  IssueComment,
+  IssueSnapshot,
+  ProjectItem,
+  ProjectSnapshot,
+} from "./types.js";
+
+const PROJECT_QUERY = /* GraphQL */ `
+	query ProjectSnapshot(
+		$owner: String!
+		$number: Int!
+		$itemsCursor: String
+		$isOrg: Boolean!
+		$isUser: Boolean!
+	) {
+		# We can't parameterize "organization" vs "user" in a single query,
+		# so we ask for both and use whichever the caller actually populated.
+		# This is a common GitHub-API workaround.
+		organization: organization(login: $owner) @include(if: $isOrg) {
+			projectV2(number: $number) {
+				...ProjectFields
+			}
+		}
+		user: user(login: $owner) @include(if: $isUser) {
+			projectV2(number: $number) {
+				...ProjectFields
+			}
+		}
+	}
+
+	fragment ProjectFields on ProjectV2 {
+		id
+		title
+		number
+		url
+		fields(first: 50) {
+			nodes {
+				... on ProjectV2FieldCommon {
+					name
+				}
+			}
+		}
+		items(first: 100, after: $itemsCursor) {
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				id
+				type
+				content {
+					__typename
+					... on Issue {
+						number
+						title
+						url
+						state
+						repository {
+							nameWithOwner
+						}
+					}
+				}
+				fieldValues(first: 50) {
+					nodes {
+						__typename
+						... on ProjectV2ItemFieldTextValue {
+							text
+							field {
+								... on ProjectV2FieldCommon {
+									name
+								}
+							}
+						}
+						... on ProjectV2ItemFieldNumberValue {
+							number
+							field {
+								... on ProjectV2FieldCommon {
+									name
+								}
+							}
+						}
+						... on ProjectV2ItemFieldDateValue {
+							date
+							field {
+								... on ProjectV2FieldCommon {
+									name
+								}
+							}
+						}
+						... on ProjectV2ItemFieldSingleSelectValue {
+							name
+							field {
+								... on ProjectV2FieldCommon {
+									name
+								}
+							}
+						}
+						... on ProjectV2ItemFieldIterationValue {
+							title
+							startDate
+							field {
+								... on ProjectV2FieldCommon {
+									name
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+`;
+
+// The GraphQL response shapes — narrow types just for parsing, kept private
+// to this module. We map them into our domain types before exporting.
+
+interface RawFieldValue {
+  __typename: string;
+  text?: string;
+  number?: number;
+  date?: string;
+  name?: string;
+  title?: string;
+  startDate?: string;
+  field?: { name?: string };
+}
+
+interface RawProjectItem {
+  id: string;
+  type: "ISSUE" | "PULL_REQUEST" | "DRAFT_ISSUE" | "REDACTED";
+  content: {
+    __typename: string;
+    number?: number;
+    title?: string;
+    url?: string;
+    state?: string;
+    repository?: { nameWithOwner: string };
+  } | null;
+  fieldValues: { nodes: RawFieldValue[] };
+}
+
+interface RawProjectResponse {
+  organization?: { projectV2: RawProject | null } | null;
+  user?: { projectV2: RawProject | null } | null;
+}
+
+interface RawProject {
+  id: string;
+  title: string;
+  number: number;
+  url: string;
+  fields: { nodes: Array<{ name?: string }> };
+  items: {
+    pageInfo: { hasNextPage: boolean; endCursor: string | null };
+    nodes: RawProjectItem[];
+  };
+}
+
+/** Pull a primitive value out of a raw field value entry. */
+function extractFieldValue(
+  raw: RawFieldValue,
+): [name: string, value: FieldValue] | null {
+  const name = raw.field?.name;
+  if (!name) return null;
+
+  switch (raw.__typename) {
+    case "ProjectV2ItemFieldTextValue":
+      return [name, raw.text ?? null];
+    case "ProjectV2ItemFieldNumberValue":
+      return [name, raw.number ?? null];
+    case "ProjectV2ItemFieldDateValue":
+      return [name, raw.date ?? null];
+    case "ProjectV2ItemFieldSingleSelectValue":
+      return [name, raw.name ?? null];
+    case "ProjectV2ItemFieldIterationValue":
+      // Render iterations as "Sprint 4 (2026-04-15)" or similar.
+      return [
+        name,
+        raw.title ? `${raw.title} (${raw.startDate ?? "?"})` : null,
+      ];
+    default:
+      return null;
+  }
+}
+
+/** Map a raw API item to our domain type. Returns null for non-issues. */
+function toProjectItem(raw: RawProjectItem): ProjectItem | null {
+  if (raw.type !== "ISSUE" || !raw.content) return null;
+
+  const fields: Record<string, FieldValue> = {};
+  for (const rawValue of raw.fieldValues.nodes) {
+    const entry = extractFieldValue(rawValue);
+    if (entry) fields[entry[0]] = entry[1];
+  }
+
+  return {
+    id: raw.id,
+    contentType: "Issue",
+    number: raw.content.number ?? null,
+    title: raw.content.title ?? "",
+    url: raw.content.url ?? null,
+    state: raw.content.state ?? null,
+    repository: raw.content.repository?.nameWithOwner ?? null,
+    // These come from the issue itself, not the project field values.
+    // We're not querying them yet — see TODO below.
+    assignees: [],
+    labels: [],
+    milestone: null,
+    issueType: null,
+    parentIssue: null,
+    createdAt: "",
+    updatedAt: "",
+    closedAt: null,
+    fields,
+  };
+}
+
+/**
+ * Fetch a complete project snapshot, paginating through all items.
+ *
+ * TODO: The query above doesn't yet pull issue-level metadata (assignees,
+ * labels, dates, issueType, parent). Adding those to the Issue inline fragment
+ * is straightforward — keeping this first version focused on the polymorphic
+ * field-value handling, which is the trickier part.
+ */
+export async function fetchProject(
+  client: GraphQL,
+  ownerType: "orgs" | "users",
+  owner: string,
+  number: number,
+): Promise<ProjectSnapshot | null> {
+  const isOrg = ownerType === "orgs";
+  const items: ProjectItem[] = [];
+  const fieldNames = new Set<string>();
+  let projectMeta: {
+    id: string;
+    title: string;
+    number: number;
+    url: string;
+  } | null = null;
+  let cursor: string | null = null;
+
+  do {
+    const data: RawProjectResponse = await client(PROJECT_QUERY, {
+      owner,
+      number,
+      itemsCursor: cursor,
+      isOrg,
+      isUser: !isOrg,
+    });
+
+    const project =
+      data.organization?.projectV2 ?? data.user?.projectV2 ?? null;
+    if (!project) return null;
+
+    projectMeta ??= {
+      id: project.id,
+      title: project.title,
+      number: project.number,
+      url: project.url,
+    };
+
+    for (const node of project.fields.nodes) {
+      if (node.name) fieldNames.add(node.name);
+    }
+
+    for (const rawItem of project.items.nodes) {
+      const item = toProjectItem(rawItem);
+      if (item) items.push(item);
+    }
+
+    cursor = project.items.pageInfo.hasNextPage
+      ? project.items.pageInfo.endCursor
+      : null;
+  } while (cursor);
+
+  // projectMeta is guaranteed set because the loop always runs at least once
+  // and would have returned null if the project didn't exist.
+  if (!projectMeta) return null;
+
+  return {
+    ...projectMeta,
+    fieldNames: [...fieldNames],
+    items,
+  };
+}
+
+const ISSUE_QUERY = /* GraphQL */ `
+	query IssueSnapshot(
+		$owner: String!
+		$repo: String!
+		$number: Int!
+		$commentsCursor: String
+	) {
+		repository(owner: $owner, name: $repo) {
+			issue(number: $number) {
+				number
+				title
+				url
+				state
+				body
+				createdAt
+				updatedAt
+				closedAt
+				author {
+					login
+				}
+				assignees(first: 20) {
+					nodes {
+						login
+					}
+				}
+				labels(first: 50) {
+					nodes {
+						name
+					}
+				}
+				milestone {
+					title
+				}
+				issueType {
+					name
+				}
+				parent {
+					url
+				}
+				comments(first: 100, after: $commentsCursor) {
+					pageInfo {
+						hasNextPage
+						endCursor
+					}
+					nodes {
+						body
+						createdAt
+						author {
+							login
+						}
+					}
+				}
+			}
+		}
+	}
+`;
+
+interface RawIssueResponse {
+  repository: {
+    issue: {
+      number: number;
+      title: string;
+      url: string;
+      state: string;
+      body: string;
+      createdAt: string;
+      updatedAt: string;
+      closedAt: string | null;
+      author: { login: string } | null;
+      assignees: { nodes: Array<{ login: string }> };
+      labels: { nodes: Array<{ name: string }> };
+      milestone: { title: string } | null;
+      issueType: { name: string } | null;
+      parent: { url: string } | null;
+      comments: {
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+        nodes: Array<{
+          body: string;
+          createdAt: string;
+          author: { login: string } | null;
+        }>;
+      };
+    } | null;
+  } | null;
+}
+
+type RawIssue = NonNullable<
+  NonNullable<RawIssueResponse["repository"]>["issue"]
+>;
+
+/** Fetch a single issue with all comments (paginated). */
+export async function fetchIssue(
+  client: GraphQL,
+  owner: string,
+  repo: string,
+  number: number,
+): Promise<IssueSnapshot | null> {
+  const comments: IssueComment[] = [];
+  let issueMeta: RawIssue | null = null;
+  let cursor: string | null = null;
+
+  do {
+    const data: RawIssueResponse = await client(ISSUE_QUERY, {
+      owner,
+      repo,
+      number,
+      commentsCursor: cursor,
+    });
+
+    const issue = data.repository?.issue;
+    if (!issue) return null;
+    issueMeta ??= issue;
+
+    for (const c of issue.comments.nodes) {
+      comments.push({
+        author: c.author?.login ?? null,
+        createdAt: c.createdAt,
+        bodyMarkdown: c.body,
+      });
+    }
+
+    cursor = issue.comments.pageInfo.hasNextPage
+      ? issue.comments.pageInfo.endCursor
+      : null;
+  } while (cursor);
+
+  if (!issueMeta) return null;
+
+  return {
+    owner,
+    repo,
+    number: issueMeta.number,
+    title: issueMeta.title,
+    url: issueMeta.url,
+    state: issueMeta.state,
+    author: issueMeta.author?.login ?? null,
+    createdAt: issueMeta.createdAt,
+    updatedAt: issueMeta.updatedAt,
+    closedAt: issueMeta.closedAt,
+    assignees: issueMeta.assignees.nodes.map((n) => n.login),
+    labels: issueMeta.labels.nodes.map((n) => n.name),
+    milestone: issueMeta.milestone?.title ?? null,
+    issueType: issueMeta.issueType?.name ?? null,
+    parentIssue: issueMeta.parent?.url ?? null,
+    bodyMarkdown: issueMeta.body,
+    comments,
+  };
+}

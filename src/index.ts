@@ -5,7 +5,11 @@
  *   GET /                 — landing page with two URL inputs
  *   GET /export?url=...   — project URL → xlsx
  *   GET /pdf?url=...      — issue URL → pdf
+ *   GET /_debug?url=...   — TEMP: dump the raw fetch as JSON
  */
+
+import { makeClient } from "./github/client.js";
+import { fetchIssue, fetchProject } from "./github/queries.js";
 
 type ProjectRef = {
   kind: "project";
@@ -37,10 +41,8 @@ function parseGitHubUrl(input: string): GitHubRef | null {
 
   if (url.hostname !== "github.com") return null;
 
-  // Strip leading/trailing slashes, then split. e.g. "orgs/acme/projects/3"
   const segments = url.pathname.replace(/^\/|\/$/g, "").split("/");
 
-  // Project URL: /{orgs|users}/{owner}/projects/{number}
   if (segments.length === 4 && segments[2] === "projects") {
     const [ownerType, owner, , numberStr] = segments;
     if (ownerType !== "orgs" && ownerType !== "users") return null;
@@ -49,7 +51,6 @@ function parseGitHubUrl(input: string): GitHubRef | null {
     return { kind: "project", ownerType, owner: owner!, number };
   }
 
-  // Issue URL: /{owner}/{repo}/issues/{number}
   if (segments.length === 4 && segments[2] === "issues") {
     const [owner, repo, , numberStr] = segments;
     const number = Number(numberStr);
@@ -60,7 +61,6 @@ function parseGitHubUrl(input: string): GitHubRef | null {
   return null;
 }
 
-/** Render the landing page HTML. */
 function landingPage(): Response {
   const html = `<!doctype html>
 <html lang="en">
@@ -103,11 +103,17 @@ function landingPage(): Response {
   });
 }
 
-/** 400 Bad Request with a plain-text reason. */
 function badRequest(reason: string): Response {
   return new Response(`Bad request: ${reason}\n`, {
     status: 400,
     headers: { "content-type": "text/plain; charset=utf-8" },
+  });
+}
+
+function jsonResponse(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8" },
   });
 }
 
@@ -122,7 +128,6 @@ async function handleExport(url: URL, _env: Env): Promise<Response> {
     );
   }
 
-  // TODO: fetch project items from GitHub, build xlsx, return bytes.
   return new Response(
     `Would export project: ${ref.ownerType}/${ref.owner} #${ref.number}\n`,
     { headers: { "content-type": "text/plain; charset=utf-8" } },
@@ -140,11 +145,36 @@ async function handlePdf(url: URL, _env: Env): Promise<Response> {
     );
   }
 
-  // TODO: fetch issue from GitHub, render HTML, send to Browser binding for PDF.
   return new Response(
     `Would render issue: ${ref.owner}/${ref.repo} #${ref.number}\n`,
     { headers: { "content-type": "text/plain; charset=utf-8" } },
   );
+}
+
+/** TEMP: dump the raw fetch result as JSON. Remove once xlsx + pdf work. */
+async function handleDebug(url: URL, env: Env): Promise<Response> {
+  const target = url.searchParams.get("url");
+  if (!target) return badRequest("missing ?url= parameter");
+
+  const ref = parseGitHubUrl(target);
+  if (!ref) return badRequest("unrecognized GitHub URL shape");
+
+  const client = makeClient(env.GITHUB_TOKEN);
+
+  try {
+    const result =
+      ref.kind === "project"
+        ? await fetchProject(client, ref.ownerType, ref.owner, ref.number)
+        : await fetchIssue(client, ref.owner, ref.repo, ref.number);
+
+    if (!result) return jsonResponse({ error: "not found" }, 404);
+    return jsonResponse(result);
+  } catch (err) {
+    return jsonResponse(
+      { error: err instanceof Error ? err.message : String(err) },
+      500,
+    );
+  }
 }
 
 export default {
@@ -158,6 +188,8 @@ export default {
         return handleExport(url, env);
       case "/pdf":
         return handlePdf(url, env);
+      case "/_debug":
+        return handleDebug(url, env);
       default:
         return new Response("Not found\n", {
           status: 404,

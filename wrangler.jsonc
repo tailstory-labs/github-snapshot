@@ -23,5 +23,8 @@
     "mode": "smart"
   },
   "upload_source_maps": true,
-  "preview_urls": true
+  "preview_urls": true,
+  "secrets": {
+    "required": ["GITHUB_TOKEN"]
+  }
 }
