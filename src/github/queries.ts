@@ -58,8 +58,30 @@ const PROJECT_QUERY = /* GraphQL */ `
 						title
 						url
 						state
+						createdAt
+						updatedAt
+						closedAt
 						repository {
 							nameWithOwner
+						}
+						assignees(first: 20) {
+							nodes {
+								login
+							}
+						}
+						labels(first: 50) {
+							nodes {
+								name
+							}
+						}
+						milestone {
+							title
+						}
+						issueType {
+							name
+						}
+						parent {
+							url
 						}
 					}
 				}
@@ -137,7 +159,15 @@ interface RawProjectItem {
     title?: string;
     url?: string;
     state?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    closedAt?: string | null;
     repository?: { nameWithOwner: string };
+    assignees?: { nodes: Array<{ login: string }> };
+    labels?: { nodes: Array<{ name: string }> };
+    milestone?: { title: string } | null;
+    issueType?: { name: string } | null;
+    parent?: { url: string } | null;
   } | null;
   fieldValues: { nodes: RawFieldValue[] };
 }
@@ -186,9 +216,9 @@ function extractFieldValue(
   }
 }
 
-/** Map a raw API item to our domain type. Returns null only for items with no content. */
+/** Map a raw API item to our domain type. Returns null for non-issues. */
 function toProjectItem(raw: RawProjectItem): ProjectItem | null {
-  if (!raw.content) return null;
+  if (raw.type !== "ISSUE" || !raw.content) return null;
 
   const fields: Record<string, FieldValue> = {};
   for (const rawValue of raw.fieldValues.nodes) {
@@ -196,37 +226,27 @@ function toProjectItem(raw: RawProjectItem): ProjectItem | null {
     if (entry) fields[entry[0]] = entry[1];
   }
 
-  // TEMP: cast whatever we see so we can debug. Will re-tighten to issues only.
-  const contentType = raw.content.__typename as ProjectItem["contentType"];
-
   return {
     id: raw.id,
-    contentType,
+    contentType: "Issue",
     number: raw.content.number ?? null,
     title: raw.content.title ?? "",
     url: raw.content.url ?? null,
     state: raw.content.state ?? null,
     repository: raw.content.repository?.nameWithOwner ?? null,
-    assignees: [],
-    labels: [],
-    milestone: null,
-    issueType: null,
-    parentIssue: null,
-    createdAt: "",
-    updatedAt: "",
-    closedAt: null,
+    assignees: raw.content.assignees?.nodes.map((n) => n.login) ?? [],
+    labels: raw.content.labels?.nodes.map((n) => n.name) ?? [],
+    milestone: raw.content.milestone?.title ?? null,
+    issueType: raw.content.issueType?.name ?? null,
+    parentIssue: raw.content.parent?.url ?? null,
+    createdAt: raw.content.createdAt ?? "",
+    updatedAt: raw.content.updatedAt ?? "",
+    closedAt: raw.content.closedAt ?? null,
     fields,
   };
 }
 
-/**
- * Fetch a complete project snapshot, paginating through all items.
- *
- * TODO: The query above doesn't yet pull issue-level metadata (assignees,
- * labels, dates, issueType, parent). Adding those to the Issue inline fragment
- * is straightforward — keeping this first version focused on the polymorphic
- * field-value handling, which is the trickier part.
- */
+/** Fetch a complete project snapshot, paginating through all items. */
 export async function fetchProject(
   client: GraphQL,
   ownerType: "orgs" | "users",
