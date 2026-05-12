@@ -52,16 +52,18 @@ function parseGitHubUrl(input: string): GitHubRef | null {
   if (segments.length === 4 && segments[2] === "projects") {
     const [ownerType, owner, , numberStr] = segments;
     if (ownerType !== "orgs" && ownerType !== "users") return null;
+    if (!owner || !numberStr) return null;
     const number = Number(numberStr);
     if (!Number.isInteger(number) || number <= 0) return null;
-    return { kind: "project", ownerType, owner: owner!, number };
+    return { kind: "project", ownerType, owner, number };
   }
 
   if (segments.length === 4 && segments[2] === "issues") {
     const [owner, repo, , numberStr] = segments;
+    if (!owner || !repo || !numberStr) return null;
     const number = Number(numberStr);
     if (!Number.isInteger(number) || number <= 0) return null;
-    return { kind: "issue", owner: owner!, repo: repo!, number };
+    return { kind: "issue", owner, repo, number };
   }
 
   return null;
