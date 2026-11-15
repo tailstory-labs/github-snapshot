@@ -13,27 +13,34 @@ This Worker is designed to be forked and deployed to your own Cloudflare account
 
 1. Fork this repo to your GitHub account.
 2. Clone your fork and install dependencies:
+
    ```bash
    git clone https://github.com/YOUR_NAME/github-snapshot.git
    cd github-snapshot
    npm install
    ```
 3. Authenticate Wrangler against your Cloudflare account:
+
    ```bash
    npx wrangler login
    ```
+
    In a Codespace or other headless environment, use a Cloudflare API token instead. Create one at https://dash.cloudflare.com/profile/api-tokens with the "Edit Cloudflare Workers" template, then export it:
+
    ```bash
    export CLOUDFLARE_API_TOKEN=your_token_here
    ```
 4. Set your GitHub PAT as a Worker secret (see "GitHub PAT scopes" below):
+
    ```bash
    npx wrangler secret put GITHUB_TOKEN
    ```
 5. Deploy:
+
    ```bash
    npm run deploy
    ```
+
    Wrangler will print the URL of your deployed Worker, something like `github-snapshot.YOUR-SUBDOMAIN.workers.dev`.
 
 ## GitHub PAT scopes
