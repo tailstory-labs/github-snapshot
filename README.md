@@ -15,4 +15,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for local development, code structure, an
 
 ## License
 
-MIT
+Copyright 2026 Tailstory. [Apache 2.0](LICENSE).
