@@ -1,4 +1,4 @@
-import puppeteer from "@cloudflare/puppeteer";
+import puppeteer, { type BrowserWorker } from "@cloudflare/puppeteer";
 
 import type { IssueSnapshot } from "../../github/types.ts";
 import { buildIssueHtml } from "./html.ts";
@@ -14,14 +14,14 @@ import { buildIssueHtml } from "./html.ts";
  */
 export async function buildPdf(
   snapshot: IssueSnapshot,
-  browserBinding: Fetcher,
+  browserBinding: BrowserWorker,
 ): Promise<Uint8Array> {
   const { headerHtml, mainHtml, footerHtml } = buildIssueHtml(snapshot);
 
   const browser = await puppeteer.launch(browserBinding);
   try {
     const page = await browser.newPage();
-    await page.setContent(mainHtml, { waitUntil: "networkidle0" });
+    await page.setContent(mainHtml, { waitUntil: "load" });
 
     const pdf = await page.pdf({
       format: "Letter",
