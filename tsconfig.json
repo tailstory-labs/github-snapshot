@@ -16,7 +16,8 @@
 
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
-    "noEmit": true
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
   "include": ["src/**/*.ts", "worker-configuration.d.ts"],
   "exclude": ["node_modules"]

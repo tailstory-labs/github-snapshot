@@ -84,7 +84,7 @@ Workers Builds injects `WORKERS_CI_COMMIT_SHA` and `WORKERS_CI_BRANCH` automatic
 You can pull updates from upstream through GitHub's "Sync fork" button on your fork's main page, or from the command line:
 
 ```bash
-git remote add upstream https://github.com/shenanigansd/github-snapshot.git
+git remote add upstream https://github.com/tailstory/github-snapshot.git
 git fetch upstream
 git merge upstream/main
 ```
